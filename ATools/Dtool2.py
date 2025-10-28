@@ -302,6 +302,9 @@ decomposer.print_tests()
 # 绘制结果
 decomposer.plot_results()
 
+#    else:
+#        gap = 0 
+#future_data[pred_col] += gap
 
 
 '''

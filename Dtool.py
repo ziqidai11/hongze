@@ -156,6 +156,29 @@ def align_and_adjust(df_resampled, base_year=2024, file_prefix='aligned_weekly')
     # 返回处理后的DataFrame
     return df_resampled_aligned
 
+    
+def plot_predictions(y_test, future_data, col=True, label=True):
+    # 根据col参数确定要使用的列名
+    if col:
+        pred_col = '预测值_全量'
+        if pred_col not in future_data.columns:
+            pred_col = '预测值_全值'
+    else:
+        pred_col = '预测值'
+        
+    # 检查列是否存在
+    if pred_col not in future_data.columns:
+        raise ValueError(f'列名 {pred_col} 不存在')
+        
+    # 计算调整值
+    if label:
+        gap = y_test.iloc[-1] - future_data[pred_col].iloc[0]
+
+    # 调整预测值
+    print(f"Gap between last actual value and first prediction: {gap}")
+    return future_data
+
+
 
 # stl 拆分存储
 def test_stl_parameters(data, value_col, seasonal, trend, period, seasonal_deg, trend_deg, low_pass_deg, robust):
@@ -236,11 +259,6 @@ def test_stl_parameters(data, value_col, seasonal, trend, period, seasonal_deg, 
 
     plt.tight_layout()
     plt.show()
-def plot_predictions(y_test,future_data,col=True,label=True):
-    p='预测值_全量'if col else'预测值';p=p if p in future_data.columns else('预测值_全值'if col else'预测值');p=p if p in future_data.columns else exec("raise ValueError(f'列名 {p} 不存在')");g=y_test.iloc[-1]-future_data[p].iloc[0]if label else 0;future_data[p]+=g;return future_data
-'''
-future_data = plot_predictions(y_test, future_data, col=True, label=True)
-'''
 
 '''
 params_to_test = [
@@ -859,121 +877,3 @@ def plot_feature_distribution(df, feature_columns, bins=30, figsize=(18, 12)):
         plt.xlabel(col)
     plt.tight_layout()
     plt.show()
-
-
-# 领先性
-# 计算密歇根大学消费者信心指数的shift值，使得值为52.2时落在sheet的最后一天
-# 找到密歇根大学消费者信心指数为52.2的日期
-# 定义一个函数来处理因子的shift值计算
-def calculate_shift_value(sheet, column_name, target_value, last_day_index=pd.Timestamp('2025-05-30'), default_shift=6):
-    # 检查last_day_index是否为周末，如果是则顺延至下周一
-    if last_day_index.weekday() >= 5:  # 5是周六，6是周日
-        # 计算需要增加的天数，使日期变为下周一
-        days_to_add = 7 - last_day_index.weekday() if last_day_index.weekday() == 6 else 2
-        last_day_index = last_day_index + pd.Timedelta(days=days_to_add)
-        print(f"输入日期为周末，已顺延至下周一: {last_day_index.strftime('%Y-%m-%d')}")
-
-    target_value_indices = sheet.index[sheet[column_name] == target_value]
-    if not target_value_indices.empty:
-        # 只在2025年4月的数据中查找目标值
-        import datetime
-        current_date = datetime.datetime.now()
-        target_value_indices = target_value_indices[target_value_indices.map(lambda x: x.year == current_date.year and x.month == current_date.month)]
-        if target_value_indices.empty:
-            print(f"在2025年4月没有找到{column_name}为{target_value}的记录")
-            return default_shift
-        target_date = target_value_indices[0]
-        # 获取两个日期在DataFrame中的位置索引
-        target_position = sheet.index.get_loc(target_date)
-        last_position = sheet.index.get_loc(last_day_index)
-        # 计算行差
-        shift_value = last_position - target_position
-        print(f"{column_name}计算得到的shift值为: {shift_value}")
-        return int(shift_value)
-    else:
-        print(f"未找到{column_name}为{target_value}的记录，使用默认shift值{default_shift}")
-        return default_shift
-    
-
-
-
-def plot_xgb_feature_importance(model, X_train, title='XGBoost多维度特征重要性对比（标准化后）'):
-    """
-    绘制XGBoost多维度特征重要性对比图，并附带中文业务含义表格
-
-    参数：
-    - model: 已训练好的xgboost.Booster模型
-    - X_train: 训练集DataFrame，用于映射特征名
-    - title: 图表标题（可选）
-    """
-    importance_types = ['weight', 'gain', 'cover', 'total_gain', 'total_cover']
-
-    # 提取各类重要性指标
-    df_importance = pd.DataFrame()
-    for imp_type in importance_types:
-        scores = model.get_score(importance_type=imp_type)
-        feature_names = dict(zip([f'f{i}' for i in range(len(X_train.columns))], X_train.columns))
-        scores_with_names = {feature_names.get(k, k): v for k, v in scores.items()}
-        temp_df = pd.DataFrame.from_dict(scores_with_names, orient='index', columns=[imp_type])
-        df_importance = df_importance.join(temp_df, how='outer') if not df_importance.empty else temp_df
-
-    df_importance = df_importance.fillna(0)
-    df_importance = df_importance.sort_values(by='weight', ascending=False)
-
-    # 归一化
-    df_importance_norm = df_importance.copy()
-    for col in importance_types:
-        df_importance_norm[col] = df_importance_norm[col] / df_importance_norm[col].max()
-
-    df_importance = df_importance_norm
-
-    # 绘图
-    plt.figure(figsize=(14, 15))
-
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
-    color_map = dict(zip(importance_types, colors))
-
-    y_pos = np.arange(len(df_importance))
-    width = 0.13
-
-    for i, imp_type in enumerate(importance_types):
-        plt.barh(y_pos + i * width, df_importance[imp_type],
-                 width, label=imp_type, color=color_map[imp_type], alpha=0.85)
-
-    plt.yticks(y_pos + width * 2, df_importance.index, fontsize=12)
-    plt.title(title, fontsize=16)
-    plt.xlabel('标准化重要性值', fontsize=13)
-    plt.legend(title='重要性类型', bbox_to_anchor=(1.03, 1), loc='upper left')
-
-    # 中文业务含义表格
-    table_data = [
-        ['weight', '因子在预测场景中被频繁用作分组依据的次数。高 → 该因子适合快速划分市场状态，是第一层“筛子”。'],
-        ['gain', '每次用该因子分组能提升多少预测准确度。高 → 对定价预测有极强“辨别能力”，是决定性因素。'],
-        ['cover', '该因子每次分组时所覆盖的数据量。高 → 适合划分普遍性特征，适用于大部分情况。'],
-        ['total_gain', '累计提升了多少准确度（次数×单次提升）。高 → 综合贡献大，稳定又强势。'],
-        ['total_cover', '累计覆盖了多少样本。高 → 广泛参与预测过程，缺它预测不完整。']
-    ]
-
-    table = plt.table(
-        cellText=table_data,
-        colLabels=None,
-        cellLoc='left',
-        loc='bottom',
-        bbox=[-0.12, -0.8, 1.18, 0.55]
-    )
-
-    table.auto_set_font_size(False)
-    table.set_fontsize(14)
-    table.auto_set_column_width(col=list(range(len(table_data[0]))))
-
-    for key, cell in table.get_celld().items():
-        cell.set_linewidth(0.5)
-        cell.get_text().set_fontsize(10)  # 控制字体大小，避免文字超出单元格
-        cell.get_text().set_wrap(True)    # 允许自动换行（有的版本有效）
-        cell.get_text().set_ha('left')
-        cell.get_text().set_va('center')
-
-    plt.tight_layout()
-    plt.show()
-    return df_importance
-
