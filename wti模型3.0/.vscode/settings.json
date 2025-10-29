@@ -1,0 +1,7 @@
+{
+    "workbench.editorAssociations": {
+        "*.xlsx": "default",
+        "*.png": "imagePreview.previewEditor",
+        "file:/**/*.xlsx": "jupyter-data-wrangler"
+    }
+}
