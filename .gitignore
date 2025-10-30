@@ -1,0 +1,12 @@
+**/*.xlsx
+**/*.csv
+**/*.png
+**/*.pdf
+**/*.html
+.ipynb_checkpoints/
+**/outputs/** 
+**/figures/**
+__pychche__/
+*.py[cod]
+.venv/
+.env/
